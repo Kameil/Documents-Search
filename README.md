@@ -1,6 +1,6 @@
 # Search in Documents
 
-A **semantic search** tool for local documents using **Google Gemini embeddings**, featuring a **PyGTK (GTK 3 / GObject)** graphical interface.
+A **semantic search** tool for local documents using **Gemma2Embedding**, featuring a **PyGTK (GTK 3 / GObject)** graphical interface.
 
 ---
 
