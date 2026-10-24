@@ -1,0 +1,49 @@
+[project]
+name = "search-in-documents"
+version = "0.1.0"
+description = "Busca semântica em documentos locais usando Ollama + embeddinggemma-2 e interface PyGTK"
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    # Embeddings via Ollama
+    "ollama>=0.4.0",
+
+    # Document parsing
+    "pymupdf>=1.23.0",        # PDF
+    "python-docx>=1.1.0",     # DOCX
+    "openpyxl>=3.1.0",        # XLSX
+    "markdown>=3.5.0",        # Markdown
+
+    # Vector store / similarity search
+    "numpy>=1.26.0",
+    "faiss-cpu>=1.7.4",
+
+    # Utilities
+    "tqdm>=4.66.0",
+    "python-dotenv>=1.0.0",
+]
+
+# Projeto é uma aplicação, não uma biblioteca — não instalar como pacote
+# Nota: venv deve ser criado com: uv venv --system-site-packages
+# para que o gi (PyGObject) instalado via apt/dnf fique acessível
+[tool.uv]
+package = false
+
+# Dev dependencies (formato atual do uv)
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.4.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

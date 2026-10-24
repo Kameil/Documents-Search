@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.env
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+.python-version
+
+# uv (uv.lock deve ser commitado; não adicionar aqui)
+# requirements.txt é gerado via: uv export --no-hashes -o requirements.txt
+
+# Data / indexes
+data/vector_store/
+data/cache/
+*.index
+*.pkl
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
