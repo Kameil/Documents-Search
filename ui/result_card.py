@@ -8,7 +8,7 @@ como um card visual com score, nome do documento e trecho de texto.
 from __future__ import annotations
 
 import gi
-gi.require_version("Gtk", "3.0")
+gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
 
 from core.vector_store import SearchResult
@@ -39,9 +39,9 @@ class ResultCard(Gtk.Box):
         score_label.get_style_context().add_class("result-score")
         score_label.set_halign(Gtk.Align.END)
 
-        header.pack_start(rank_label, False, False, 0)
-        header.pack_start(doc_label, True, True, 0)
-        header.pack_end(score_label, False, False, 0)
+        header.append(rank_label)
+        header.append(doc_label)
+        header.append(score_label)
 
         # --- Separador ---
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
@@ -53,9 +53,9 @@ class ResultCard(Gtk.Box):
         text_label.set_xalign(0.0)
         text_label.set_selectable(True)
 
-        self.pack_start(header, False, False, 0)
-        self.pack_start(sep, False, False, 2)
-        self.pack_start(text_label, False, False, 0)
+        self.append(header)
+        self.append(sep)
+        self.append(text_label)
 
     @staticmethod
     def _truncate(text: str, max_chars: int) -> str:

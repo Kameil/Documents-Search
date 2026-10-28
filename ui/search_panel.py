@@ -13,11 +13,21 @@ from __future__ import annotations
 from typing import Callable
 
 import gi
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk
 
 from core.vector_store import SearchResult
+from ui.cursors import use_hand_cursor
 from ui.result_card import ResultCard
+from ui.scroll_effects import enable_elastic_scrolling
+
+
+def iter_children(widget: Gtk.Widget):
+    child = widget.get_first_child()
+    while child:
+        next_child = child.get_next_sibling()
+        yield child
+        child = next_child
 
 
 class SearchPanel(Gtk.Box):
@@ -35,6 +45,7 @@ class SearchPanel(Gtk.Box):
     def _build_ui(self) -> None:
         # --- Área de busca ---
         search_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        search_bar.get_style_context().add_class("search-bar")
         search_bar.set_margin_top(20)
         search_bar.set_margin_start(20)
         search_bar.set_margin_end(20)
@@ -48,16 +59,18 @@ class SearchPanel(Gtk.Box):
 
         self._search_btn = Gtk.Button(label="🔍  Buscar")
         self._search_btn.get_style_context().add_class("btn-primary")
+        use_hand_cursor(self._search_btn)
         self._search_btn.connect("clicked", self._on_search_clicked)
 
-        search_bar.pack_start(self._entry, True, True, 0)
-        search_bar.pack_start(self._search_btn, False, False, 0)
+        search_bar.append(self._entry)
+        search_bar.append(self._search_btn)
 
         # --- Barra de progresso ---
         self._progress = Gtk.ProgressBar()
         self._progress.set_margin_start(20)
         self._progress.set_margin_end(20)
-        self._progress.set_no_show_all(True)
+        self._progress.set_show_text(True)
+        self._progress.set_text("0%")
         self._progress.hide()
 
         # --- Label de status ---
@@ -69,18 +82,19 @@ class SearchPanel(Gtk.Box):
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
+        enable_elastic_scrolling(scroll)
 
         self._results_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self._results_box.set_margin_start(16)
         self._results_box.set_margin_end(16)
         self._results_box.set_margin_bottom(16)
-        scroll.add(self._results_box)
+        scroll.set_child(self._results_box)
 
         # Montagem
-        self.pack_start(search_bar, False, False, 0)
-        self.pack_start(self._progress, False, False, 4)
-        self.pack_start(self._status_label, False, False, 2)
-        self.pack_start(scroll, True, True, 0)
+        self.append(search_bar)
+        self.append(self._progress)
+        self.append(self._status_label)
+        self.append(scroll)
 
     # ------------------------------------------------------------------
     # Handlers
@@ -110,14 +124,13 @@ class SearchPanel(Gtk.Box):
 
         for rank, result in enumerate(results, start=1):
             card = ResultCard(result, rank)
-            self._results_box.pack_start(card, False, False, 0)
+            self._results_box.append(card)
 
-        self._results_box.show_all()
         self.set_status(f"{len(results)} resultado(s) encontrado(s).", "status-success")
 
     def clear_results(self) -> None:
         """Remove todos os cards de resultado."""
-        for child in self._results_box.get_children():
+        for child in iter_children(self._results_box):
             self._results_box.remove(child)
 
     def set_status(self, message: str, css_class: str = "status-label") -> None:
@@ -140,7 +153,9 @@ class SearchPanel(Gtk.Box):
 
     def set_progress(self, fraction: float, message: str = "") -> None:
         """Atualiza a barra de progresso (0.0–1.0)."""
+        fraction = max(0.0, min(fraction, 1.0))
         self._progress.show()
         self._progress.set_fraction(fraction)
+        self._progress.set_text(f"{fraction:.0%}")
         if message:
             self.set_status(message)

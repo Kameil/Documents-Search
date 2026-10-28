@@ -100,8 +100,8 @@ ollama pull embeddinggemma-2
 uv run python main.py
 ```
 
-1. Click **"Add Files"** in the sidebar.
-2. Select one or more documents — they will be indexed automatically.
+1. Click **"Add Files"** to choose one or more documents, or **"Add Folder"** to
+   index every supported document in a selected folder and its subfolders.
 3. Enter a question in the search field and press **Enter** or click **"Search"**.
 4. The most relevant passages will appear, ranked by relevance.
 
