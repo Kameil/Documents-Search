@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 
 import gi
-gi.require_version("Gtk", "3.0")
+gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gio
 
 from ui.main_window import MainWindow
@@ -27,13 +27,15 @@ class SearchApp(Gtk.Application):
             application_id="com.example.search_in_documents",
             flags=Gio.ApplicationFlags.FLAGS_NONE,
         )
+        self._window: MainWindow | None = None
         self.connect("activate", self._on_activate)
 
     def _on_activate(self, app: "SearchApp") -> None:
-        # Aplica o CSS global antes de criar a janela
-        apply_css()
-        win = MainWindow(app)
-        win.present()
+        if self._window is None:
+            # Aplica o CSS global antes de criar a janela
+            apply_css()
+            self._window = MainWindow(app)
+        self._window.present()
 
 
 def main() -> int:

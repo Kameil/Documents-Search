@@ -18,8 +18,9 @@ import threading
 from pathlib import Path
 
 import gi
+from dotenv import set_key
 
-gi.require_version("Gtk", "3.0")
+gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib
 
 from config import config
@@ -37,7 +38,6 @@ class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application) -> None:
         super().__init__(application=app, title="Search in Documents")
         self.set_default_size(1100, 680)
-        self.set_position(Gtk.WindowPosition.CENTER)
 
         # --- Core ---
         self._store = VectorStore()
@@ -53,7 +53,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self._ollama_ok = self._check_ollama()
 
         self._build_ui()
-        self.show_all()
+        self.show()
 
     def _check_ollama(self) -> bool:
         """Testa a conexão com o Ollama. Retorna True se OK."""
@@ -69,12 +69,12 @@ class MainWindow(Gtk.ApplicationWindow):
         dialog = Gtk.MessageDialog(
             transient_for=self,
             message_type=Gtk.MessageType.ERROR,
-            buttons=Gtk.ButtonsType.OK,
             text="Ollama não acessível",
             secondary_text=message,
         )
-        dialog.run()
-        dialog.destroy()
+        dialog.add_button("OK", Gtk.ResponseType.OK)
+        dialog.connect("response", lambda dialog, _response: dialog.destroy())
+        dialog.show()
         return False  # Remove do idle_add
 
     # ------------------------------------------------------------------
@@ -84,9 +84,22 @@ class MainWindow(Gtk.ApplicationWindow):
     def _build_ui(self) -> None:
         # Header bar
         header = Gtk.HeaderBar()
-        header.set_title("Search in Documents")
-        header.set_subtitle("Embed Search with Gemma2Embedding")
-        header.set_show_close_button(True)
+        header.set_show_title_buttons(True)
+
+        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        title = Gtk.Label(label="Search in Documents")
+        title.get_style_context().add_class("title")
+        subtitle = Gtk.Label(label="Embed Search with Gemma2Embedding")
+        subtitle.get_style_context().add_class("subtitle")
+        title_box.append(title)
+        title_box.append(subtitle)
+        header.set_title_widget(title_box)
+
+        settings_button = Gtk.Button(label="⚙")
+        settings_button.set_tooltip_text("Configurações")
+        settings_button.get_style_context().add_class("btn-toolbar")
+        settings_button.connect("clicked", self._on_settings_clicked)
+        header.pack_end(settings_button)
 
         self.set_titlebar(header)
 
@@ -101,15 +114,113 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self._search_panel = SearchPanel(on_search=self._on_search)
 
-        paned.pack1(self._sidebar, resize=False, shrink=False)
-        paned.pack2(self._search_panel, resize=True, shrink=False)
+        paned.set_start_child(self._sidebar)
+        paned.set_end_child(self._search_panel)
         paned.set_position(240)
 
-        self.add(paned)
+        self.set_child(paned)
 
     # ------------------------------------------------------------------
     # Callbacks de indexação
     # ------------------------------------------------------------------
+
+    def _on_settings_clicked(self, _button: Gtk.Button) -> None:
+        """Abre as configurações de conexão e embedding."""
+        dialog = Gtk.Dialog(title="Configurações", transient_for=self, modal=True)
+        dialog.add_button("Cancelar", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Salvar", Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(16)
+        content.set_margin_bottom(16)
+        content.set_margin_start(20)
+        content.set_margin_end(20)
+
+        description = Gtk.Label(
+            label="Escolha o servidor Ollama e o modelo usado para gerar embeddings."
+        )
+        description.set_halign(Gtk.Align.START)
+        description.set_wrap(True)
+        content.append(description)
+
+        grid = Gtk.Grid(column_spacing=12, row_spacing=10)
+        host_entry = Gtk.Entry(text=self._embedder.host)
+        model_entry = Gtk.Entry(text=self._embedder.model)
+        host_entry.set_placeholder_text("http://localhost:11434")
+        model_entry.set_placeholder_text("embeddinggemma-2")
+
+        for row, (label, entry) in enumerate(
+            (("Servidor Ollama", host_entry), ("Modelo de embedding", model_entry))
+        ):
+            field_label = Gtk.Label(label=label)
+            field_label.set_halign(Gtk.Align.END)
+            grid.attach(field_label, 0, row, 1, 1)
+            entry.set_hexpand(True)
+            grid.attach(entry, 1, row, 1, 1)
+        content.append(grid)
+
+        dialog.connect("response", self._on_settings_response, host_entry, model_entry)
+        dialog.present()
+
+    def _on_settings_response(
+        self, dialog: Gtk.Dialog, response: int, host_entry: Gtk.Entry, model_entry: Gtk.Entry
+    ) -> None:
+        if response == Gtk.ResponseType.OK:
+            self._save_settings(host_entry.get_text().strip(), model_entry.get_text().strip())
+        dialog.destroy()
+
+    def _save_settings(self, host: str, model: str) -> None:
+        if not host or not model:
+            self._show_message(
+                Gtk.MessageType.ERROR,
+                "Configurações inválidas",
+                "Informe o servidor Ollama e o modelo de embedding.",
+            )
+            return
+
+        candidate = Embedder(host=host, model=model)
+        try:
+            candidate.ping()
+        except ConnectionError as exc:
+            self._show_message(Gtk.MessageType.ERROR, "Não foi possível aplicar", str(exc))
+            return
+
+        if self._store.total_chunks and not self._confirm_model_change():
+            return
+
+        env_path = config.base_dir / ".env"
+        set_key(str(env_path), "OLLAMA_HOST", host)
+        set_key(str(env_path), "EMBEDDING_MODEL", model)
+
+        self._embedder = candidate
+        self._indexer = Indexer(self._store, self._embedder)
+        self._searcher = Searcher(self._store, self._embedder)
+
+        if self._store.total_chunks:
+            self._on_clear_index()
+        self._ollama_ok = True
+        self._search_panel.set_status(f"Configurações salvas. Modelo ativo: {model}.", "status-success")
+
+    def _confirm_model_change(self) -> bool:
+        self._show_message(
+            Gtk.MessageType.WARNING,
+            "Limpe o índice antes de mudar o modelo",
+            "Embeddings de modelos diferentes não podem ser combinados.",
+        )
+        return False
+
+    def _show_message(self, message_type: Gtk.MessageType, title: str, detail: str) -> None:
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            message_type=message_type,
+            text=title,
+            secondary_text=detail,
+        )
+        dialog.add_button("OK", Gtk.ResponseType.OK)
+        dialog.connect("response", lambda dialog, _response: dialog.destroy())
+        dialog.show()
 
     def _on_add_files(self, paths: list[Path]) -> None:
         """Dispara indexação dos arquivos em thread separada."""
@@ -126,7 +237,8 @@ class MainWindow(Gtk.ApplicationWindow):
 
             def _progress(done: int, total: int, msg: str) -> None:
                 fraction = (i + (done / max(total, 1))) / total_files
-                GLib.idle_add(self._search_panel.set_progress, fraction, msg)
+                progress_message = f"Arquivo {i + 1}/{total_files} · {msg}"
+                GLib.idle_add(self._search_panel.set_progress, fraction, progress_message)
 
             try:
                 chunks = self._indexer.index_file(path, on_progress=_progress)
@@ -145,7 +257,11 @@ class MainWindow(Gtk.ApplicationWindow):
         n_docs = len(self._indexed_docs)
         n_chunks = self._store.total_chunks
         GLib.idle_add(self._sidebar.update_count, n_docs, n_chunks)
-        GLib.idle_add(self._search_panel.set_progress, 1.0, "Indexação concluída.")
+        GLib.idle_add(
+            self._search_panel.set_progress,
+            1.0,
+            f"Indexação concluída: {total_files} arquivo(s) processado(s).",
+        )
         GLib.idle_add(self._sidebar.set_loading, False)
 
     def _on_clear_index(self) -> None:

@@ -21,7 +21,7 @@ Uso:
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import ollama
@@ -32,10 +32,11 @@ from config import config
 class Embedder:
     """Gera embeddings via Ollama usando o modelo embeddinggemma-2."""
 
-    def __init__(self) -> None:
+    def __init__(self, host: str | None = None, model: str | None = None) -> None:
         # Cria um cliente apontando para o host configurado
-        self._client = ollama.Client(host=config.ollama_host)
-        self.model = config.embedding_model
+        self.host = host or config.ollama_host
+        self.model = model or config.embedding_model
+        self._client = ollama.Client(host=self.host)
 
     # ------------------------------------------------------------------
     # API pública
@@ -57,7 +58,7 @@ class Embedder:
     def embed_batch(
         self,
         texts: Sequence[str],
-        on_progress: "callable[[int, int], None] | None" = None,
+        on_progress: Callable[[int, int], None] | None = None,
     ) -> np.ndarray:
         """Gera embeddings para uma lista de textos.
 
@@ -112,7 +113,7 @@ class Embedder:
             return True
         except Exception as exc:
             raise ConnectionError(
-                f"Falha ao conectar ao Ollama ({config.ollama_host}) "
+                f"Falha ao conectar ao Ollama ({self.host}) "
                 f"com o modelo '{self.model}'. "
                 f"Execute: ollama pull {self.model}\nDetalhe: {exc}"
             ) from exc
